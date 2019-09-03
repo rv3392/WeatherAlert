@@ -48,7 +48,8 @@ class WarningScraper:
 			for warning in warning_list.find_all('a', href=True):
 				warning_details = self.get_warning_details(
 					self._clean_text(warning), warning['href'])
-				state_warnings.append(warning_details)
+				if warning_details[0] != "No Warning Id":
+					state_warnings.append(warning_details)
 			self._warning_list[self._state_list[index]] = state_warnings
 
 		return self._warning_list
@@ -101,7 +102,7 @@ class WarningScraper:
 		else:
 			next_warning = "No Next Date"
 
-		return [warning_id, name, description, issue_date, warning_link]
+		return tuple([warning_id, name, description, issue_date, warning_link])
 	
 	def write_to_db(self):
 		""" Writes the warning list to a database so that it can be easily 
@@ -111,14 +112,22 @@ class WarningScraper:
 		cursor = db.cursor()
 
 		cursor.execute('''CREATE TABLE IF NOT EXISTS warnings 
-					(warning_id INTEGER PRIMARY KEY, state VARCHAR(20), description TEXT, link TEXT, status TEXT)''')
+						(warning_id TEXT PRIMARY KEY, 
+						short_name TEXT, description TEXT, issue_date TEXT, 
+						link TEXT)''')
 		
 		for state in self._warning_list:
-			for warning in state:
-				pass
-				#cursor.execute(''' SELECT ''')
-		
-		#cursor.execute('''INSERT INTO test VALUES (1, 'hello')''')
+			for  warning in self._warning_list.get(state):
+				warning_id, name, description, issue_date, warning_link = warning
+				cursor.execute('''SELECT * 
+								  FROM warnings 
+								  WHERE warnings.warning_id = ?''',
+								  (warning_id,))
+				if len(cursor.fetchall()) == 0:
+					cursor.execute('''INSERT INTO warnings 
+									  VALUES (?, ?, ?, ?, ?)''', 
+									  (warning_id, name, description, 
+									  issue_date, warning_link))
 		
 		db.commit()
 		db.close()
