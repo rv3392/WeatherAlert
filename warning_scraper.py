@@ -6,7 +6,7 @@ import unicodedata
 
 class WarningScraper:
 	""" Class that reads data from the BOM warnings page, parses it and stores
-	it into a dictionary of warnings """
+	it into a dictionary of warnings and writes this to a db"""
 
 	def __init__(self):
 		""" Constructor for WarningScraper """
@@ -126,9 +126,9 @@ class WarningScraper:
 				warning_with_id = cursor.fetchall()
 				if len(warning_with_id) == 0:
 					cursor.execute('''INSERT INTO warnings 
-									  VALUES (?, ?, ?, ?, ?, ?)''', 
+									  VALUES (?, ?, ?, ?, ?, "NEW")''', 
 									  (warning_id, name, description, 
-									  issue_date, warning_link, "NEW"))
+									  issue_date, warning_link))
 
 				cursor.execute('''SELECT issue_date FROM warnings WHERE 
 								  warnings.warning_id = ?''', (warning_id,))
@@ -136,15 +136,16 @@ class WarningScraper:
 				
 				if (issue_date,) not in issue_date_with_id:
 					for old_issue_date in issue_date_with_id:
-						cursor.execute('''UPDATE warnings SET status=? 
+						print(old_issue_date)
+						cursor.execute('''UPDATE warnings SET status="EXPIRED" 
 										WHERE warnings.warning_id = ? 
 										AND warnings.issue_date = ?''',
-										("EXPIRED", warning_id, old_issue_date))
+										(warning_id, old_issue_date[0]))
 
 					cursor.execute('''INSERT INTO warnings 
-									VALUES (?, ?, ?, ?, ?, ?)''', 
+									VALUES (?, ?, ?, ?, ?, "UPDATED")''', 
 									(warning_id, name, description, 
-									issue_date, warning_link, "UPDATED"))
+									issue_date, warning_link))
 					
 		db.commit()
 		db.close()
