@@ -2,6 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 import sqlite3
 import re
+import unicodedata
 
 class WarningScraper:
 	""" Class that reads data from the BOM warnings page, parses it and stores
@@ -42,11 +43,12 @@ class WarningScraper:
 
 		for index, warning_list in enumerate(
 				unparsed_warning_list.find_all('ul')):
+
 			state_warnings = []
 			for warning in warning_list.find_all('a', href=True):
-				warning_details = self._get_warning_details(self._clean_text(warning), warning['href'])
-				state_warnings.append(
-					[self._clean_text(warning), warning['href']])
+				warning_details = self.get_warning_details(
+					self._clean_text(warning), warning['href'])
+				state_warnings.append(warning_details)
 			self._warning_list[self._state_list[index]] = state_warnings
 
 		return self._warning_list
@@ -55,11 +57,19 @@ class WarningScraper:
 		"""(String) Takes the warning text and cleans it into a single line 
 			format.
 		"""
-
-		warning = warning.text.replace('    ', ' ').replace('\n', ' ').encode('utf-8').decode('utf-8').replace(u'\xc2','').replace(u'\xa0', ' ')
-		return warning
+		warning_text = ""
+		if warning != None:
+			warning_text = warning.get_text(strip = True)
+			warning_text = unicodedata.normalize("NFKD", warning_text)
+			warning_text.replace('    ', ' ').replace(u'\n', u' ')
+		return warning_text
 	
-	def _get_warning_details(self, warning_text, warning_link):
+	def get_warning_details(self, warning_text, warning_link):
+		""" Takes the warning title and link and fetches more details on the
+			warning from the link. 
+
+			Returns: List<id, title, description, issue_date, link>
+		"""
 		warning_data = BeautifulSoup(
 			requests.get(self._bom_url + warning_link).text, "html.parser")
 
@@ -91,8 +101,7 @@ class WarningScraper:
 		else:
 			next_warning = "No Next Date"
 
-		print(type(issue_date))
-		print(warning_id, name, description, issue_date, warning_link)
+		return [warning_id, name, description, issue_date, warning_link]
 	
 	def write_to_db(self):
 		""" Writes the warning list to a database so that it can be easily 
@@ -115,12 +124,6 @@ class WarningScraper:
 		db.close()
 
 	def _connect_db(self, database):
-		pass
-	
-	def get_warning_details(self):
-		""" Stub for future method to convert self._warning_list into a list of 
-			Warning objects 
-		"""
 		pass
 
 class Warning:

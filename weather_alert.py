@@ -5,7 +5,7 @@ def main():
     warning_scraper = WarningScraper()
     warning_list = warning_scraper.get_current_warnings()
     warning_scraper.write_to_db()
-    #pprint(warning_list)
+    pprint(warning_list)
 
 if __name__ == "__main__":
 	main()
