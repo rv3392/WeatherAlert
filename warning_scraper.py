@@ -44,18 +44,19 @@ class WarningScraper:
 				unparsed_warning_list.find_all('ul')):
 			state_warnings = []
 			for warning in warning_list.find_all('a', href=True):
-				warning_details = self._get_warning_details(self._clean_warning_text(warning), warning['href'])
+				warning_details = self._get_warning_details(self._clean_text(warning), warning['href'])
 				state_warnings.append(
-					[self._clean_warning_text(warning), warning['href']])
+					[self._clean_text(warning), warning['href']])
 			self._warning_list[self._state_list[index]] = state_warnings
 
 		return self._warning_list
 	
-	def _clean_warning_text(self, warning):
+	def _clean_text(self, warning):
 		"""(String) Takes the warning text and cleans it into a single line 
 			format.
 		"""
-		warning = warning.text.replace('    ', ' ').replace('\br', ' ').replace('\n', ' ')
+
+		warning = warning.text.replace('    ', ' ').replace('\n', ' ').encode('utf-8').decode('utf-8').replace(u'\xc2','').replace(u'\xa0', ' ')
 		return warning
 	
 	def _get_warning_details(self, warning_text, warning_link):
@@ -65,34 +66,33 @@ class WarningScraper:
 		name = warning_text
 		description = warning_data.find('p', attrs={'class' : 'sl'})
 		if description != None:
-			description = self._clean_warning_text(description)
+			description = self._clean_text(description)
 		else:
 			description = "No Description Exists"
-
 
 		warning_id = warning_data.find('p', attrs={'class' : 'p-id'})
 		if warning_id != None:
 			warning_id = warning_id.text
 		else:
 			warning_id = "No Warning Id"
-		
 
 		issue_date = warning_data.find('p', attrs={'class' : 'date'})
 		if issue_date == None:
 			issue_date = warning_data.find('p', attrs={'class' : 'dt'})
 
 		if issue_date != None:
-			issue_date = issue_date.text
+			issue_date = self._clean_text(issue_date)
 		else:
 			issue_date = "No Issue Date"
 
 		next_warning = warning_data.find('p', attrs={'class' : 'dt'})
 		if next_warning != None:
-			next_warning = self._clean_warning_text(next_warning)
+			next_warning = self._clean_text(next_warning)
 		else:
 			next_warning = "No Next Date"
 
-		print(warning_id, description, issue_date, warning_link)
+		print(type(issue_date))
+		print(warning_id, name, description, issue_date, warning_link)
 	
 	def write_to_db(self):
 		""" Writes the warning list to a database so that it can be easily 
