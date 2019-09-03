@@ -112,23 +112,40 @@ class WarningScraper:
 		cursor = db.cursor()
 
 		cursor.execute('''CREATE TABLE IF NOT EXISTS warnings 
-						(warning_id TEXT PRIMARY KEY, 
+						(warning_id TEXT, 
 						short_name TEXT, description TEXT, issue_date TEXT, 
-						link TEXT)''')
+						link TEXT, status TEXT, PRIMARY KEY (warning_id, issue_date))''')
 		
 		for state in self._warning_list:
 			for  warning in self._warning_list.get(state):
+
 				warning_id, name, description, issue_date, warning_link = warning
-				cursor.execute('''SELECT * 
-								  FROM warnings 
-								  WHERE warnings.warning_id = ?''',
-								  (warning_id,))
-				if len(cursor.fetchall()) == 0:
+
+				cursor.execute('''SELECT * FROM warnings WHERE 
+								  warnings.warning_id = ?''', (warning_id,))	  
+				warning_with_id = cursor.fetchall()
+				if len(warning_with_id) == 0:
 					cursor.execute('''INSERT INTO warnings 
-									  VALUES (?, ?, ?, ?, ?)''', 
+									  VALUES (?, ?, ?, ?, ?, ?)''', 
 									  (warning_id, name, description, 
-									  issue_date, warning_link))
-		
+									  issue_date, warning_link, "NEW"))
+
+				cursor.execute('''SELECT issue_date FROM warnings WHERE 
+								  warnings.warning_id = ?''', (warning_id,))
+				issue_date_with_id = cursor.fetchall()
+				
+				if (issue_date,) not in issue_date_with_id:
+					for old_issue_date in issue_date_with_id:
+						cursor.execute('''UPDATE warnings SET status=? 
+										WHERE warnings.warning_id = ? 
+										AND warnings.issue_date = ?''',
+										("EXPIRED", warning_id, old_issue_date))
+
+					cursor.execute('''INSERT INTO warnings 
+									VALUES (?, ?, ?, ?, ?, ?)''', 
+									(warning_id, name, description, 
+									issue_date, warning_link, "UPDATED"))
+					
 		db.commit()
 		db.close()
 
