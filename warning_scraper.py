@@ -96,13 +96,16 @@ class WarningScraper:
 		else:
 			issue_date = "No Issue Date"
 
+		issue_timestamp = self._parse_datetime(issue_date)
+
 		next_warning = warning_data.find('p', attrs={'class' : 'dt'})
 		if next_warning != None:
 			next_warning = self._clean_text(next_warning)
 		else:
 			next_warning = "No Next Date"
 
-		return tuple([warning_id, name, description, issue_date, warning_link])
+		return tuple([warning_id, name, description, issue_timestamp, 
+						warning_link])
 	
 	def write_to_db(self):
 		""" Writes the warning list to a database so that it can be easily 
@@ -112,7 +115,7 @@ class WarningScraper:
 		cursor = db.cursor()
 
 		cursor.execute('''CREATE TABLE IF NOT EXISTS warnings 
-						(warning_id TEXT, 
+						(warning_id TEXT, state TEXT,
 						short_name TEXT, description TEXT, issue_date TEXT, 
 						link TEXT, status TEXT, PRIMARY KEY (warning_id, issue_date))''')
 		
@@ -126,8 +129,8 @@ class WarningScraper:
 				warning_with_id = cursor.fetchall()
 				if len(warning_with_id) == 0:
 					cursor.execute('''INSERT INTO warnings 
-									  VALUES (?, ?, ?, ?, ?, "NEW")''', 
-									  (warning_id, name, description, 
+									  VALUES (?, ?, ?, ?, ?, ?, "NEW")''', 
+									  (warning_id, state, name, description, 
 									  issue_date, warning_link))
 
 				cursor.execute('''SELECT issue_date FROM warnings WHERE 
@@ -136,23 +139,70 @@ class WarningScraper:
 				
 				if (issue_date,) not in issue_date_with_id:
 					for old_issue_date in issue_date_with_id:
-						print(old_issue_date)
 						cursor.execute('''UPDATE warnings SET status="EXPIRED" 
 										WHERE warnings.warning_id = ? 
 										AND warnings.issue_date = ?''',
 										(warning_id, old_issue_date[0]))
 
 					cursor.execute('''INSERT INTO warnings 
-									VALUES (?, ?, ?, ?, ?, "UPDATED")''', 
-									(warning_id, name, description, 
+									VALUES (?, ?, ?, ?, ?, ?, "UPDATED")''', 
+									(warning_id, state, name, description, 
 									issue_date, warning_link))
 					
 		db.commit()
 		db.close()
 
-	def _connect_db(self, database):
-		pass
+	def _parse_datetime(self, datetime):
+		""" Takes a datetime string and converts it into a machine readable
+			version. Warning: Lots of Regex
+		"""
 
-class Warning:
-	""" Stub for future Warning object if needed """
-	pass
+		months = {"January":"01", "February":"02", "March":"03", "April":"04", 
+					"May":"05", "June":"06", "July":"07", "August":"08", 
+					"September":"09", "October":"10", "November":"11", 
+					"December":"12"}
+
+		#Time difference with EST for each timezone in minutes
+		timezone_diff = {"EST":0, "WST":120, "CST":30}
+
+		new_datetime = re.search(r"(.*)(for)(.*)", datetime)
+		if new_datetime != None:
+			datetime = new_datetime.group(1)
+		else:
+			datetime = datetime
+			
+		timezone = re.search(r"[E,C,W](ST)", datetime)
+		if timezone != None:
+			timezone = timezone.group(0)
+
+		time = re.search(r"\d{1}:\d{2} (am)?(pm)?", datetime)
+		if time != None:
+			time = time.group(0)
+			hour = re.search(r"(\d{1}):(\d{2})", time ).group(1)
+			minute = re.search(r"(\d{1}):(\d{2})", time).group(2)
+			hour_minute = int(hour) * 60 + int(minute)
+
+			#Convert to 24hr time and add time difference to convert to AEST
+			if re.search(r"(am)", time) != None:
+				hour_minute = hour_minute + timezone_diff.get(timezone)
+			elif re.search(r"(pm)", time) != None:
+				hour_minute = hour_minute + 12 * 60 + timezone_diff.get(timezone)
+			
+			hour = str(hour_minute // 60)
+			minute = str(hour_minute % 60)
+			time = hour + ":" + minute + ":00"
+		else:
+			time = ""
+
+		date = re.search(r"(\d?\d) ([A-Z,a-z]+) (\d{4})", datetime)
+		day = ""
+		month = ""
+		year = ""
+
+		if date != None:
+			day = date.group(1)
+			month = months.get(date.group(2))
+			year = date.group(3)
+
+		timestamp = year + "-" + month + "-" + day + " " + time
+		return timestamp
