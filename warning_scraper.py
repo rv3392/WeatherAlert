@@ -3,6 +3,7 @@ from bs4 import BeautifulSoup
 import sqlite3
 import re
 import unicodedata
+from datetime import datetime
 
 class WarningScraper:
 	""" Class that reads data from the BOM warnings page, parses it and stores
@@ -14,6 +15,7 @@ class WarningScraper:
 		self._warning_list = {}
 		self._bom_url = "http://www.bom.gov.au"
 		self._data_url = "/australia/warnings/"
+		self._SECONDS_IN_DAY = 86400
 
 	def get_html_data(self):
 		""" Reads HTML data from BOM warnings page 
@@ -54,17 +56,6 @@ class WarningScraper:
 
 		return self._warning_list
 	
-	def _clean_text(self, warning):
-		"""(String) Takes the warning text and cleans it into a single line 
-			format.
-		"""
-		warning_text = ""
-		if warning != None:
-			warning_text = warning.get_text(strip = True)
-			warning_text = unicodedata.normalize("NFKD", warning_text)
-			warning_text.replace('    ', ' ').replace(u'\n', u' ')
-		return warning_text
-	
 	def get_warning_details(self, warning_text, warning_link):
 		""" Takes the warning title and link and fetches more details on the
 			warning from the link. 
@@ -79,7 +70,7 @@ class WarningScraper:
 		if description != None:
 			description = self._clean_text(description)
 		else:
-			description = "No Description Exists"
+			description = "No Description"
 
 		warning_id = warning_data.find('p', attrs={'class' : 'p-id'})
 		if warning_id != None:
@@ -96,7 +87,7 @@ class WarningScraper:
 		else:
 			issue_date = "No Issue Date"
 
-		issue_timestamp = self._parse_datetime(issue_date)
+		issue_timestamp = self._parse_string_date(issue_date)
 
 		next_warning = warning_data.find('p', attrs={'class' : 'dt'})
 		if next_warning != None:
@@ -132,6 +123,12 @@ class WarningScraper:
 									  VALUES (?, ?, ?, ?, ?, ?, "NEW")''', 
 									  (warning_id, state, name, description, 
 									  issue_date, warning_link))
+				#If the warning is older than 1 day, delete it from the database
+				elif (len(warning_with_id) != 0 
+						and self._string_date_too_old(warning_with_id[0][4])):
+					cursor.execute('''DELETE FROM warnings
+									  WHERE warnings.warning_id = ?''', 
+									  (warning_id,))
 
 				cursor.execute('''SELECT issue_date FROM warnings WHERE 
 								  warnings.warning_id = ?''', (warning_id,))
@@ -148,12 +145,38 @@ class WarningScraper:
 									VALUES (?, ?, ?, ?, ?, ?, "UPDATED")''', 
 									(warning_id, state, name, description, 
 									issue_date, warning_link))
-					
+				
 		db.commit()
 		db.close()
 
-	def _parse_datetime(self, datetime):
-		""" Takes a datetime string and converts it into a machine readable
+	def _clean_text(self, warning):
+		"""(String) Takes the warning text and cleans it into a single line 
+			format.
+		"""
+		warning_text = ""
+		if warning != None:
+			warning_text = warning.get_text(strip = True)
+			warning_text = unicodedata.normalize("NFKD", warning_text)
+			warning_text.replace('    ', ' ').replace(u'\n', u' ')
+		return warning_text
+
+	def _string_date_too_old(self, input_date):
+		"""(Boolean) Takes a string date as input (format: 
+			"YYYY-MM-DD HH:mm:SS") and returns whether a day has passed since 
+			the date.
+		"""
+		warning_datetime = datetime.strptime(input_date, "%Y-%m-%d %X")
+		current_datetime = datetime.now()
+
+		time_diff = (current_datetime - warning_datetime).total_seconds()
+		if (time_diff > self._SECONDS_IN_DAY):
+			return True
+		else:
+			return False
+
+
+	def _parse_string_date(self, string_date):
+		""" Takes a string_date string and converts it into a machine readable
 			version. Warning: Lots of Regex
 		"""
 
@@ -165,17 +188,17 @@ class WarningScraper:
 		#Time difference with EST for each timezone in minutes
 		timezone_diff = {"EST":0, "WST":120, "CST":30}
 
-		new_datetime = re.search(r"(.*)(for)(.*)", datetime)
-		if new_datetime != None:
-			datetime = new_datetime.group(1)
+		new_string_date = re.search(r"(.*)(for)(.*)", string_date)
+		if new_string_date != None:
+			string_date = new_string_date.group(1)
 		else:
-			datetime = datetime
+			string_date = string_date
 			
-		timezone = re.search(r"[E,C,W](ST)", datetime)
+		timezone = re.search(r"[E,C,W](ST)", string_date)
 		if timezone != None:
 			timezone = timezone.group(0)
 
-		time = re.search(r"\d{1}:\d{2} (am)?(pm)?", datetime)
+		time = re.search(r"\d{1}:\d{2} (am)?(pm)?", string_date)
 		if time != None:
 			time = time.group(0)
 			hour = re.search(r"(\d{1}):(\d{2})", time ).group(1)
@@ -188,13 +211,13 @@ class WarningScraper:
 			elif re.search(r"(pm)", time) != None:
 				hour_minute = hour_minute + 12 * 60 + timezone_diff.get(timezone)
 			
-			hour = str(hour_minute // 60)
-			minute = str(hour_minute % 60)
+			hour = format(hour_minute // 60, "02d")
+			minute = format(hour_minute % 60, "02d")
 			time = hour + ":" + minute + ":00"
 		else:
 			time = ""
 
-		date = re.search(r"(\d?\d) ([A-Z,a-z]+) (\d{4})", datetime)
+		date = re.search(r"(\d?\d) ([A-Z,a-z]+) (\d{4})", string_date)
 		day = ""
 		month = ""
 		year = ""
