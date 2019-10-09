@@ -194,7 +194,7 @@ class WarningScraper:
 		else:
 			string_date = string_date
 			
-		timezone = re.search(r"[E,C,W](ST)", string_date)
+		timezone = re.search(r"[E,C,W][D,S]T", string_date)
 		if timezone != None:
 			timezone = timezone.group(0)
 
