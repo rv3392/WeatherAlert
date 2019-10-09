@@ -186,7 +186,7 @@ class WarningScraper:
 					"December":"12"}
 
 		#Time difference with EST for each timezone in minutes
-		timezone_diff = {"EST":0, "WST":120, "CST":30}
+		timezone_diff = {"EST":0, "WST":120, "CST":30, "EDT":-60, "CDT":-30}
 
 		new_string_date = re.search(r"(.*)(for)(.*)", string_date)
 		if new_string_date != None:
