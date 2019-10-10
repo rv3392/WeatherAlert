@@ -6,6 +6,9 @@ def get_warnings():
     warning_list = warning_scraper.get_current_warnings()
     warning_scraper.write_to_db()
 
+def check_database_updates():
+    pass
+
 def main():
     get_warnings()
 
