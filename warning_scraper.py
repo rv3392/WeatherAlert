@@ -54,6 +54,7 @@ class WarningScraper:
 					state_warnings.append(warning_details)
 			self._warning_list[self._state_list[index]] = state_warnings
 
+		print(self._warning_list)
 		return self._warning_list
 	
 	def get_warning_details(self, warning_text, warning_link):
@@ -76,7 +77,11 @@ class WarningScraper:
 		if warning_id != None:
 			warning_id = warning_id.text
 		else:
-			warning_id = "No Warning Id"
+			warning_id = warning_data.find('h4')
+			if warning_id != None:
+				warning_id = warning_id.text
+			else:
+				warning_id = "No Warning Id"
 
 		issue_date = warning_data.find('p', attrs={'class' : 'date'})
 		if issue_date == None:
@@ -84,8 +89,13 @@ class WarningScraper:
 
 		if issue_date != None:
 			issue_date = self._clean_text(issue_date)
+			issue_date = issue_date.replace("on", "")
 		else:
-			issue_date = "No Issue Date"
+			issue_date = re.search(r"(Issued at [0-9]+:[0-9][0-9] (?:am|pm) (?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday), [0-9]* (?:January|February|March|April|May|June|July|August|September|October|November|December) [0-9]{4}).<br/>", str(warning_data))
+			if issue_date == None:
+				issue_date = "No Issue Date"
+			else:
+				issue_date = issue_date.group().replace(",", "")
 
 		issue_timestamp = self._parse_string_date(issue_date)
 
@@ -157,7 +167,7 @@ class WarningScraper:
 		if warning != None:
 			warning_text = warning.get_text(strip = True)
 			warning_text = unicodedata.normalize("NFKD", warning_text)
-			warning_text.replace('    ', ' ').replace(u'\n', u' ')
+			warning_text = warning_text.replace('    ', '  ').replace(u'\n', u' ').replace('  ', ' ')
 		return warning_text
 
 	def _string_date_too_old(self, input_date):
@@ -188,6 +198,18 @@ class WarningScraper:
 		#Time difference with EST for each timezone in minutes
 		timezone_diff = {"EST":0, "WST":120, "CST":30, "EDT":-60, "CDT":-30}
 
+		date = re.search(r"(\d?\d) ([A-Z,a-z]+) (\d{4})", string_date)
+		day = ""
+		month = ""
+		year = ""
+
+		if date != None:
+			day = date.group(1)
+			month = months.get(date.group(2))
+			year = date.group(3)
+		else:
+			return "No Date"
+
 		new_string_date = re.search(r"(.*)(for)(.*)", string_date)
 		if new_string_date != None:
 			string_date = new_string_date.group(1)
@@ -197,6 +219,10 @@ class WarningScraper:
 		timezone = re.search(r"[E,C,W][D,S]T", string_date)
 		if timezone != None:
 			timezone = timezone.group(0)
+		else:
+			#TODO - Change so that the actual timezone can be found where
+			#there isn't one in the issue date string
+			timezone = "EST"
 
 		time = re.search(r"\d{1}:\d{2} (am)?(pm)?", string_date)
 		if time != None:
@@ -212,20 +238,15 @@ class WarningScraper:
 				hour_minute = hour_minute + 12 * 60 + timezone_diff.get(timezone)
 			
 			hour = format(hour_minute // 60, "02d")
+
+			if int(hour) < 0:
+				day = str(int(day) - 1)
+				hour = str(24 + int(hour))
+
 			minute = format(hour_minute % 60, "02d")
 			time = hour + ":" + minute + ":00"
 		else:
 			time = ""
-
-		date = re.search(r"(\d?\d) ([A-Z,a-z]+) (\d{4})", string_date)
-		day = ""
-		month = ""
-		year = ""
-
-		if date != None:
-			day = date.group(1)
-			month = months.get(date.group(2))
-			year = date.group(3)
 
 		timestamp = year + "-" + month + "-" + day + " " + time
 		return timestamp

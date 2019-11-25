@@ -12,7 +12,7 @@ def send_email():
     db = sqlite3.connect('warnings.db')
     cursor = db.cursor()
 
-    email_content = cursor.execute('''SELECT * FROM warnings''').fetchall()
+    email_content = cursor.execute('''SELECT * FROM warnings ORDER BY status''').fetchall()
 
     email = WarningEmail("richalverma00@gmail.com", email_content)
     email.send()
